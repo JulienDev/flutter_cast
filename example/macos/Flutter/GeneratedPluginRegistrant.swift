@@ -5,8 +5,10 @@
 import FlutterMacOS
 import Foundation
 
-import bonsoir
+import bonsoir_darwin
+import connectivity_plus
 
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
-  BonsoirPlugin.register(with: registry.registrar(forPlugin: "BonsoirPlugin"))
+  SwiftBonsoirPlugin.register(with: registry.registrar(forPlugin: "SwiftBonsoirPlugin"))
+  ConnectivityPlugin.register(with: registry.registrar(forPlugin: "ConnectivityPlugin"))
 }
