@@ -20,6 +20,7 @@ class CastSocket {
   int _requestId = 0;
   int get requestId => _requestId;
   final _controller = StreamController<CastSocketMessage>.broadcast();
+  final List<int> _buffer = [];
 
   CastSocket._(this._socket);
 
@@ -43,21 +44,50 @@ class CastSocket {
 
   void _startListening() {
     _socket.listen((event) {
-      // happen
       if (_controller.isClosed) {
         return;
       }
 
-      List<int> slice = event.getRange(4, event.length).toList();
-      CastMessage message = CastMessage.fromBuffer(slice);
-
-      Map<String, dynamic> payload = jsonDecode(message.payloadUtf8);
-      _controller.add(CastSocketMessage(message.namespace, payload));
+      _buffer.addAll(event);
+      _processBuffer();
     }, onError: (error) {
       _controller.addError(error);
     }, onDone: () {
       _controller.close();
     }, cancelOnError: false);
+  }
+
+  void _processBuffer() {
+    // Process all complete messages in the buffer
+    while (_buffer.length >= 4) {
+      // Read message length from first 4 bytes (big-endian)
+      final messageLength = _readUInt32BE(_buffer, 0);
+
+      // Check if we have the complete message
+      if (_buffer.length < 4 + messageLength) {
+        // Wait for more data
+        return;
+      }
+
+      // Extract the message bytes
+      final messageBytes = _buffer.sublist(4, 4 + messageLength);
+      _buffer.removeRange(0, 4 + messageLength);
+
+      try {
+        final message = CastMessage.fromBuffer(messageBytes);
+        final payload = jsonDecode(message.payloadUtf8) as Map<String, dynamic>;
+        _controller.add(CastSocketMessage(message.namespace, payload));
+      } catch (e) {
+        print('CastSocket: Error parsing message: $e');
+      }
+    }
+  }
+
+  static int _readUInt32BE(List<int> buffer, int offset) {
+    return (buffer[offset] << 24) |
+        (buffer[offset + 1] << 16) |
+        (buffer[offset + 2] << 8) |
+        buffer[offset + 3];
   }
 
   Future<dynamic> close() {
